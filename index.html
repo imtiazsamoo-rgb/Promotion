@@ -76,6 +76,12 @@ button:disabled{
 .class-line{
   margin-top:10px;
 }
+.debug{
+  white-space:pre-wrap;
+  font-size:14px;
+  color:#444;
+  margin-top:8px;
+}
 </style>
 </head>
 
@@ -100,10 +106,10 @@ button:disabled{
     <input id="search" oninput="applyFilter()" placeholder="Search student or GR No">
 
     <div id="topMsg" class="status-msg"></div>
+    <div id="debug" class="debug"></div>
   </div>
 
   <div id="progress" class="section progress">0 / 0</div>
-
   <div id="studentBox"></div>
 
   <div class="nav">
@@ -114,7 +120,7 @@ button:disabled{
 </div>
 
 <script>
-const API_URL = 'https://script.google.com/macros/s/AKfycbxN6JX5ClM_X0stmP4o_FMka4MgiGqgS8-e1T6tF39G2yw_FUsSscbVUjbF0t-WPUwtLg/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzWkftKuy1LMUTay3g4wXR-URiip7kZIBDjwaxSvXiloxhtyRlhsaDHxpOHGTqBleLcjg/exec';
 
 let data = null;
 let students = [];
@@ -128,6 +134,11 @@ function setTopMsg(t, c) {
   top.innerText = t || '';
 }
 
+function setDebug(msg) {
+  document.getElementById('debug').innerText = msg || '';
+  console.log(msg || '');
+}
+
 function updateNavButtons() {
   document.getElementById('prevBtn').disabled = saving || i <= 0 || filtered.length === 0;
   document.getElementById('nextBtn').disabled = saving || i >= filtered.length - 1 || filtered.length === 0;
@@ -136,8 +147,23 @@ function updateNavButtons() {
 async function api(params) {
   const u = new URL(API_URL);
   Object.keys(params).forEach(k => u.searchParams.set(k, params[k]));
-  const res = await fetch(u.toString());
-  return await res.json();
+
+  setDebug("Calling URL:\n" + u.toString());
+
+  const res = await fetch(u.toString(), {
+    method: 'GET',
+    redirect: 'follow'
+  });
+
+  const text = await res.text();
+
+  setDebug(
+    "Final URL: " + res.url + "\n" +
+    "HTTP Status: " + res.status + "\n\n" +
+    "Response:\n" + text
+  );
+
+  return JSON.parse(text);
 }
 
 async function loadInit() {
@@ -152,7 +178,7 @@ async function loadInit() {
     const school = document.getElementById('school');
     school.innerHTML = '<option value="">Select School</option>';
 
-    data.schools.forEach(s => {
+    (data.schools || []).forEach(s => {
       const o = document.createElement('option');
       o.value = s;
       o.text = s;
@@ -163,6 +189,7 @@ async function loadInit() {
     updateNavButtons();
   } catch (e) {
     setTopMsg("Error loading", "error");
+    setDebug("INIT ERROR:\n" + (e.stack || e.message || String(e)));
     alert(e.message || String(e));
   }
 }
@@ -180,7 +207,7 @@ function onSchoolChange() {
   filtered = [];
   i = 0;
 
-  (data.classMap[schoolValue] || []).forEach(c => {
+  ((data && data.classMap && data.classMap[schoolValue]) || []).forEach(c => {
     const o = document.createElement('option');
     o.value = c;
     o.text = c;
@@ -214,6 +241,7 @@ async function loadStudents() {
     show();
   } catch (e) {
     setTopMsg("", "");
+    setDebug("STUDENT LOAD ERROR:\n" + (e.stack || e.message || String(e)));
     alert(e.message || String(e));
   }
 }
@@ -276,7 +304,6 @@ function show() {
     newClassEl.value = getNext(s.currentClass, selected);
   });
 
-  // جيڪڏهن اڳ ۾ status موجود آهي ته نيو ڪلاس به صحيح ڏيکاريو
   if (statusEl.value) {
     newClassEl.value = getNext(s.currentClass, statusEl.value);
   }
@@ -314,8 +341,6 @@ async function save() {
   const statusEl = document.getElementById('status');
   const newClassEl = document.getElementById('newClass');
   const rowMsgEl = document.getElementById('rowMsg');
-
-  if (!statusEl || !newClassEl || !rowMsgEl) return;
 
   if (!statusEl.value) {
     rowMsgEl.className = "status-msg error";
